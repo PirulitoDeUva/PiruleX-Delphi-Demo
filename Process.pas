@@ -9,6 +9,7 @@ type
   TProcessList = TList<TProcessInfo>;
 
 function ListProcessWindows: TProcessList;
+function GetModuleInfo(Id: Cardinal; Module: String; Base: PPointer; Size: PCardinal): Boolean;
 function ReadProcessByte(Id: Cardinal; Addr: Pointer): Byte;
 function ReadProcessWord(Id: Cardinal; Addr: Pointer): Word;
 function ReadProcessDWord(Id: Cardinal; Addr: Pointer): DWord;
@@ -77,6 +78,38 @@ begin
     end));
   Result := List;
   FreeAndNil(UniqueList);
+end;
+
+function GetModuleInfo(Id: Cardinal; Module: String; Base: PPointer; Size: PCardinal): Boolean;
+var
+  hProc: THandle;
+  hMods: Array [0 .. 1024] of HMODULE;
+  ModName: Array [0 .. MAX_PATH] of Char;
+  ModInfo: TModuleInfo;
+  i, cbNeeded: Cardinal;
+begin
+  Result := False;
+  hProc := OpenProcess(PROCESS_ALL_ACCESS, False, Id);
+  if hProc > 0 then
+  begin
+    if EnumProcessModules(hProc, @hMods, sizeof(hMods), cbNeeded) then
+    begin
+      for i := 0 to cbNeeded div sizeof(HMODULE) do
+      begin
+        if (Module = '') or ((GetModuleBaseName(hProc, hMods[i], ModName, sizeof(ModName)) > 0) and (CompareText(Module, ModName) = 0)) then
+        begin
+          GetModuleInformation(hProc, hMods[i], @ModInfo, sizeof(ModInfo));
+          if Base <> Nil then
+            Base^ := ModInfo.lpBaseOfDll;
+          if Size <> Nil then
+            Size^ := ModInfo.SizeOfImage;
+          Result := True;
+          Break;
+        end;
+      end;
+    end;
+    CloseHandle(hProc);
+  end;
 end;
 
 function ReadProcessByte(Id: Cardinal; Addr: Pointer): Byte;
