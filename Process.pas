@@ -2,14 +2,14 @@ unit Process;
 
 interface
 
-uses Windows, Classes, SysUtils, Generics.Defaults, Generics.Collections;
+uses Windows, PSAPI, Classes, SysUtils, Generics.Defaults, Generics.Collections;
 
 type
   TProcessInfo = TPair<Cardinal, String>;
   TProcessList = TList<TProcessInfo>;
 
 function ListProcessWindows: TProcessList;
-function GetModuleInfo(Id: Cardinal; Module: String; Base: PPointer; Size: PCardinal): Boolean;
+function GetModuleInfo(Id: Cardinal; Module: String; Size: PCardinal; Entry: PPointer): Pointer;
 function ReadProcessByte(Id: Cardinal; Addr: Pointer): Byte;
 function ReadProcessWord(Id: Cardinal; Addr: Pointer): Word;
 function ReadProcessDWord(Id: Cardinal; Addr: Pointer): DWord;
@@ -80,7 +80,7 @@ begin
   FreeAndNil(UniqueList);
 end;
 
-function GetModuleInfo(Id: Cardinal; Module: String; Base: PPointer; Size: PCardinal): Boolean;
+function GetModuleInfo(Id: Cardinal; Module: String; Size: PCardinal; Entry: PPointer): Pointer;
 var
   hProc: THandle;
   hMods: Array [0 .. 1024] of HMODULE;
@@ -88,7 +88,7 @@ var
   ModInfo: TModuleInfo;
   i, cbNeeded: Cardinal;
 begin
-  Result := False;
+  Result := Nil;
   hProc := OpenProcess(PROCESS_ALL_ACCESS, False, Id);
   if hProc > 0 then
   begin
@@ -98,12 +98,14 @@ begin
       begin
         if (Module = '') or ((GetModuleBaseName(hProc, hMods[i], ModName, sizeof(ModName)) > 0) and (CompareText(Module, ModName) = 0)) then
         begin
-          GetModuleInformation(hProc, hMods[i], @ModInfo, sizeof(ModInfo));
-          if Base <> Nil then
-            Base^ := ModInfo.lpBaseOfDll;
-          if Size <> Nil then
-            Size^ := ModInfo.SizeOfImage;
-          Result := True;
+          if GetModuleInformation(hProc, hMods[i], @ModInfo, sizeof(ModInfo)) then
+          begin
+            if Size <> Nil then
+              Size^ := ModInfo.SizeOfImage;
+            if Entry <> Nil then
+              Entry^ := ModInfo.EntryPoint;
+            Result := ModInfo.lpBaseOfDll;
+          end;
           Break;
         end;
       end;
